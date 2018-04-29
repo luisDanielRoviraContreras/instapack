@@ -2,13 +2,13 @@ import chalk from 'chalk';
 import * as webpack from 'webpack';
 import { Source, SourceMapSource, RawSource } from 'webpack-sources';
 import { RawSourceMap } from 'source-map';
-import * as WorkerFarm from 'worker-farm';
 import { Shout } from './Shout';
 
 import { MinifyOutput } from 'uglify-js';
 import { IMinifyInputs } from './IMinifyInputs';
+import { runTaskInBackground } from './TaskManager';
 
-const jsMinifyWorkerModulePath = require.resolve('./build-workers/JsMinifyWorker');
+const jsMinifyTaskModulePath = require.resolve('./build-tasks/JsMinifyTask');
 
 /**
  * Options required for TypeScriptBuildWebpackPlugin to function, collected from Settings and ICompilerFlags.
@@ -53,7 +53,6 @@ function createMinificationInput(asset: Source, fileName: string, sourceMap: boo
  * @param sourceMap 
  */
 function minifyChunkAssets(compilation: webpack.compilation.Compilation, chunks: webpack.compilation.Chunk[], sourceMap: boolean) {
-    let jsMinifyWorker = WorkerFarm(jsMinifyWorkerModulePath);
     let tasks: Promise<void>[] = [];
 
     Shout.timed('TypeScript compile finished! Minifying bundles...');
@@ -63,15 +62,7 @@ function minifyChunkAssets(compilation: webpack.compilation.Compilation, chunks:
             let asset = compilation.assets[fileName] as Source;
             let input = createMinificationInput(asset, fileName, sourceMap);
 
-            let task = new Promise<MinifyOutput>((ok, reject) => {
-                jsMinifyWorker(input, (minifyError, minified: MinifyOutput) => {
-                    if (minifyError) {
-                        reject(minifyError);
-                    } else {
-                        ok(minified);
-                    }
-                });
-            }).then(minified => {
+            let task = runTaskInBackground<MinifyOutput>(jsMinifyTaskModulePath, input).then(minified => {
                 let output: Source;
                 if (sourceMap) {
                     output = new SourceMapSource(minified.code, fileName, JSON.parse(minified.map),

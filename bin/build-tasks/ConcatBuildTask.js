@@ -9,16 +9,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 const Settings_1 = require("../Settings");
 const ConcatBuildTool_1 = require("../ConcatBuildTool");
-module.exports = function (input, finish) {
+module.exports = function (input) {
     return __awaiter(this, void 0, void 0, function* () {
         let settings = new Settings_1.Settings(input.root, input.settings);
         let tool = new ConcatBuildTool_1.ConcatBuildTool(settings, input.flags);
-        try {
-            yield tool.buildWithStopwatch();
-            finish(null);
-        }
-        catch (error) {
-            finish(error);
-        }
+        yield tool.buildWithStopwatch();
     });
 };

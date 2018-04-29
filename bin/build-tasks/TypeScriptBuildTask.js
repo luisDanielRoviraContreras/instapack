@@ -10,19 +10,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 const Settings_1 = require("../Settings");
 const TypeScriptBuildTool_1 = require("../TypeScriptBuildTool");
 const Shout_1 = require("../Shout");
-module.exports = function (input, finish) {
+module.exports = function (input) {
     return __awaiter(this, void 0, void 0, function* () {
         if (input.flags.watch) {
             Shout_1.Shout.enableNotification = input.flags.notification;
         }
         let settings = new Settings_1.Settings(input.root, input.settings);
         let tool = new TypeScriptBuildTool_1.TypeScriptBuildTool(settings, input.flags);
-        try {
-            yield tool.build();
-            finish(null);
-        }
-        catch (error) {
-            finish(error);
-        }
+        yield tool.build();
     });
 };

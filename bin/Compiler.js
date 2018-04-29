@@ -10,12 +10,16 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", { value: true });
 const fse = require("fs-extra");
 const chalk_1 = require("chalk");
-const WorkerFarm = require("worker-farm");
+const chokidar = require("chokidar");
+const upath = require("upath");
+const assert = require("assert");
+const Settings_1 = require("./Settings");
 const Shout_1 = require("./Shout");
-const typeScriptBuildWorkerModulePath = require.resolve('./build-workers/TypeScriptBuildWorker');
-const typeScriptCheckWorkerModulePath = require.resolve('./build-workers/TypeScriptCheckWorker');
-const sassBuildWorkerModulePath = require.resolve('./build-workers/SassBuildWorker');
-const concatBuildWorkerModulePath = require.resolve('./build-workers/ConcatBuildWorker');
+const TaskManager_1 = require("./TaskManager");
+const typeScriptBuildTaskModulePath = require.resolve('./build-tasks/TypeScriptBuildTask');
+const typeScriptCheckTaskModulePath = require.resolve('./build-tasks/TypeScriptCheckTask');
+const sassBuildTaskModulePath = require.resolve('./build-tasks/SassBuildTask');
+const concatBuildTaskModulePath = require.resolve('./build-tasks/ConcatBuildTask');
 class Compiler {
     constructor(settings, flags) {
         this.settings = settings;
@@ -67,9 +71,58 @@ class Compiler {
             return exist;
         });
     }
+    deepEqual(a, b) {
+        try {
+            assert.deepStrictEqual(a, b);
+            return true;
+        }
+        catch (_a) {
+            return false;
+        }
+    }
+    restartBuildsOnConfigurationChanges(taskName) {
+        return __awaiter(this, void 0, void 0, function* () {
+            let readPackageJson = fse.readJson(this.settings.packageJson);
+            let readTsConfigJson = fse.readJson(this.settings.tsConfigJson);
+            let snapshots = {
+                [this.settings.packageJson]: yield readPackageJson,
+                [this.settings.tsConfigJson]: yield readTsConfigJson,
+            };
+            let debounced;
+            let debounce = (file) => {
+                clearTimeout(debounced);
+                debounced = setTimeout(() => __awaiter(this, void 0, void 0, function* () {
+                    let snap = yield fse.readJson(file);
+                    if (this.deepEqual(snapshots[file], snap)) {
+                        return;
+                    }
+                    snapshots[file] = snap;
+                    Shout_1.Shout.timed(chalk_1.default.cyan(file), 'was edited. Restarting builds...');
+                    TaskManager_1.killAllBackgroundTasks();
+                    this.settings = yield Settings_1.Settings.tryReadFromPackageJson(this.settings.root);
+                    this.runBuildTasks(taskName);
+                }), 600);
+            };
+            chokidar.watch([this.settings.packageJson, this.settings.tsConfigJson], {
+                ignoreInitial: true
+            })
+                .on('change', (file) => {
+                file = upath.toUnix(file);
+                debounce(file);
+            })
+                .on('unlink', (file) => {
+                file = upath.toUnix(file);
+                snapshots[file] = null;
+                Shout_1.Shout.danger(chalk_1.default.cyan(file), 'was deleted!');
+            });
+        });
+    }
     build(taskName) {
         this.chat();
-        this.runBuildWorkerForTask(taskName);
+        this.runBuildTasks(taskName);
+        if (this.flags.watch) {
+            this.restartBuildsOnConfigurationChanges(taskName);
+        }
     }
     get buildCommand() {
         return {
@@ -79,45 +132,33 @@ class Compiler {
         };
     }
     ;
-    runBuildWorkerForTask(taskName) {
+    runBuildTasks(taskName) {
         return __awaiter(this, void 0, void 0, function* () {
             switch (taskName) {
                 case 'all':
-                    this.runBuildWorkerForTask('js');
-                    this.runBuildWorkerForTask('css');
-                    this.runBuildWorkerForTask('concat');
+                    this.runBuildTasks('js');
+                    this.runBuildTasks('css');
+                    this.runBuildTasks('concat');
                     return;
                 case 'js':
                     let valid = yield this.validateJsBuildTask();
                     if (valid) {
-                        let typescriptBuildWorker = WorkerFarm(typeScriptBuildWorkerModulePath);
-                        typescriptBuildWorker(this.buildCommand, (error, result) => {
-                            if (error) {
-                                Shout_1.Shout.fatal(`during JS build:`, error);
-                                Shout_1.Shout.notify(`FATAL ERROR during JS build!`);
-                            }
-                            WorkerFarm.end(typescriptBuildWorker);
+                        TaskManager_1.runTaskInBackground(typeScriptBuildTaskModulePath, this.buildCommand).catch(error => {
+                            Shout_1.Shout.fatal(`during JS build:`, error);
+                            Shout_1.Shout.notify(`FATAL ERROR during JS build!`);
                         });
-                        let typescriptCheckWorker = WorkerFarm(typeScriptCheckWorkerModulePath);
-                        typescriptCheckWorker(this.buildCommand, (error, result) => {
-                            if (error) {
-                                Shout_1.Shout.fatal(`during type-checking:`, error);
-                                Shout_1.Shout.notify(`FATAL ERROR during type-checking!`);
-                            }
-                            WorkerFarm.end(typescriptCheckWorker);
+                        TaskManager_1.runTaskInBackground(typeScriptCheckTaskModulePath, this.buildCommand).catch(error => {
+                            Shout_1.Shout.fatal(`during type-checking:`, error);
+                            Shout_1.Shout.notify(`FATAL ERROR during type-checking!`);
                         });
                     }
                     return;
                 case 'css': {
                     let valid = yield this.validateCssBuildTask();
                     if (valid) {
-                        let sassBuildWorker = WorkerFarm(sassBuildWorkerModulePath);
-                        sassBuildWorker(this.buildCommand, (error, result) => {
-                            if (error) {
-                                Shout_1.Shout.fatal(`during CSS build:`, error);
-                                Shout_1.Shout.notify(`FATAL ERROR during CSS build!`);
-                            }
-                            WorkerFarm.end(sassBuildWorker);
+                        TaskManager_1.runTaskInBackground(sassBuildTaskModulePath, this.buildCommand).catch(error => {
+                            Shout_1.Shout.fatal(`during CSS build:`, error);
+                            Shout_1.Shout.notify(`FATAL ERROR during CSS build!`);
                         });
                     }
                     return;
@@ -125,13 +166,9 @@ class Compiler {
                 case 'concat': {
                     let valid = (this.settings.concatCount > 0);
                     if (valid) {
-                        let concatBuildWorker = WorkerFarm(concatBuildWorkerModulePath);
-                        concatBuildWorker(this.buildCommand, (error, result) => {
-                            if (error) {
-                                Shout_1.Shout.fatal(`during JS concat:`, error);
-                                Shout_1.Shout.notify(`FATAL ERROR during JS concat!`);
-                            }
-                            WorkerFarm.end(concatBuildWorker);
+                        TaskManager_1.runTaskInBackground(concatBuildTaskModulePath, this.buildCommand).catch(error => {
+                            Shout_1.Shout.fatal(`during JS concat:`, error);
+                            Shout_1.Shout.notify(`FATAL ERROR during JS concat!`);
                         });
                     }
                     return;

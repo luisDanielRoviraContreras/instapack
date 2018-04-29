@@ -357,7 +357,7 @@ export class TypeScriptBuildTool {
 
     /**
      * Runs the TypeScript build engine.
-     * Returned Promise will **never** resolve if running on watch mode!
+     * If watch mode, returned Promise will never resolve.
      */
     build() {
         return new Promise<void>((ok, reject) => {

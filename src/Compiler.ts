@@ -2,14 +2,15 @@ import * as fse from 'fs-extra';
 import chalk from 'chalk';
 import * as chokidar from 'chokidar';
 import * as upath from 'upath';
-import * as WorkerFarm from 'worker-farm';
+import * as assert from 'assert'
 import { Settings } from './Settings';
 import { Shout } from './Shout';
+import { runTaskInBackground, killAllBackgroundTasks } from './TaskManager';
 
-const typeScriptBuildWorkerModulePath = require.resolve('./build-workers/TypeScriptBuildWorker');
-const typeScriptCheckWorkerModulePath = require.resolve('./build-workers/TypeScriptCheckWorker');
-const sassBuildWorkerModulePath = require.resolve('./build-workers/SassBuildWorker');
-const concatBuildWorkerModulePath = require.resolve('./build-workers/ConcatBuildWorker');
+const typeScriptBuildTaskModulePath = require.resolve('./build-tasks/TypeScriptBuildTask');
+const typeScriptCheckTaskModulePath = require.resolve('./build-tasks/TypeScriptCheckTask');
+const sassBuildTaskModulePath = require.resolve('./build-tasks/SassBuildTask');
+const concatBuildTaskModulePath = require.resolve('./build-tasks/ConcatBuildTask');
 
 /**
  * Contains methods for assembling and invoking the build tasks.
@@ -99,16 +100,75 @@ export class Compiler {
     }
 
     /**
+     * A *slow* but sure implementation of object deep equality comparer using Node assert.
+     * @param a 
+     * @param b 
+     */
+    deepEqual(a, b) {
+        try {
+            assert.deepStrictEqual(a, b);
+            return true;
+        } catch{
+            return false;
+        }
+    }
+
+    /**
+     * Restart invoked build task(s) when package.json and tsconfig.json are edited!
+     */
+    async restartBuildsOnConfigurationChanges(taskName: string) {
+
+        let readPackageJson = fse.readJson(this.settings.packageJson);
+        let readTsConfigJson = fse.readJson(this.settings.tsConfigJson);
+
+        let snapshots = {
+            [this.settings.packageJson]: await readPackageJson,
+            [this.settings.tsConfigJson]: await readTsConfigJson,
+        };
+
+        let debounced: NodeJS.Timer;
+        let debounce = (file: string) => {
+            clearTimeout(debounced);
+            debounced = setTimeout(async () => {
+                let snap = await fse.readJson(file);
+                if (this.deepEqual(snapshots[file], snap)) {
+                    return;
+                }
+
+                snapshots[file] = snap;
+                Shout.timed(chalk.cyan(file), 'was edited. Restarting builds...');
+                killAllBackgroundTasks();
+
+                this.settings = await Settings.tryReadFromPackageJson(this.settings.root);
+                this.runBuildTasks(taskName)
+            }, 600);
+        };
+
+        chokidar.watch([this.settings.packageJson, this.settings.tsConfigJson], {
+            ignoreInitial: true
+        })
+            .on('change', (file: string) => {
+                file = upath.toUnix(file);
+                debounce(file);
+            })
+            .on('unlink', (file: string) => {
+                file = upath.toUnix(file);
+                snapshots[file] = null;
+                Shout.danger(chalk.cyan(file), 'was deleted!'); // "wtf are you doing?"
+            });
+    }
+
+    /**
      * Display build information then run relevant build tasks.
      * @param taskName 
      */
     build(taskName: string) {
         this.chat();
-        this.runBuildWorkerForTask(taskName);
+        this.runBuildTasks(taskName);
 
-        // if (this.flags.watch) {
-        //     this.restartBuildsOnConfigurationChanges(taskName);
-        // }
+        if (this.flags.watch) {
+            this.restartBuildsOnConfigurationChanges(taskName);
+        }
     }
 
     /**
@@ -126,32 +186,24 @@ export class Compiler {
      * Run build workers for the input task.
      * @param taskName 
      */
-    private async runBuildWorkerForTask(taskName: string) {
+    private async runBuildTasks(taskName: string) {
         switch (taskName) {
             case 'all':
-                this.runBuildWorkerForTask('js');
-                this.runBuildWorkerForTask('css');
-                this.runBuildWorkerForTask('concat');
+                this.runBuildTasks('js');
+                this.runBuildTasks('css');
+                this.runBuildTasks('concat');
                 return;
 
             case 'js':
                 let valid = await this.validateJsBuildTask();
                 if (valid) {
-                    let typescriptBuildWorker = WorkerFarm(typeScriptBuildWorkerModulePath);
-                    typescriptBuildWorker(this.buildCommand, (error, result) => {
-                        if (error) {
-                            Shout.fatal(`during JS build:`, error);
-                            Shout.notify(`FATAL ERROR during JS build!`);
-                        }
-                        WorkerFarm.end(typescriptBuildWorker);
+                    runTaskInBackground<void>(typeScriptBuildTaskModulePath, this.buildCommand).catch(error => {
+                        Shout.fatal(`during JS build:`, error);
+                        Shout.notify(`FATAL ERROR during JS build!`);
                     });
-                    let typescriptCheckWorker = WorkerFarm(typeScriptCheckWorkerModulePath);
-                    typescriptCheckWorker(this.buildCommand, (error, result) => {
-                        if (error) {
-                            Shout.fatal(`during type-checking:`, error);
-                            Shout.notify(`FATAL ERROR during type-checking!`);
-                        }
-                        WorkerFarm.end(typescriptCheckWorker);
+                    runTaskInBackground<void>(typeScriptCheckTaskModulePath, this.buildCommand).catch(error => {
+                        Shout.fatal(`during type-checking:`, error);
+                        Shout.notify(`FATAL ERROR during type-checking!`);
                     });
                 }
                 return;
@@ -159,13 +211,9 @@ export class Compiler {
             case 'css': {
                 let valid = await this.validateCssBuildTask();
                 if (valid) {
-                    let sassBuildWorker = WorkerFarm(sassBuildWorkerModulePath);
-                    sassBuildWorker(this.buildCommand, (error, result) => {
-                        if (error) {
-                            Shout.fatal(`during CSS build:`, error);
-                            Shout.notify(`FATAL ERROR during CSS build!`);
-                        }
-                        WorkerFarm.end(sassBuildWorker);
+                    runTaskInBackground<void>(sassBuildTaskModulePath, this.buildCommand).catch(error => {
+                        Shout.fatal(`during CSS build:`, error);
+                        Shout.notify(`FATAL ERROR during CSS build!`);
                     });
                 }
                 return;
@@ -174,13 +222,9 @@ export class Compiler {
             case 'concat': {
                 let valid = (this.settings.concatCount > 0);
                 if (valid) {
-                    let concatBuildWorker = WorkerFarm(concatBuildWorkerModulePath);
-                    concatBuildWorker(this.buildCommand, (error, result) => {
-                        if (error) {
-                            Shout.fatal(`during JS concat:`, error);
-                            Shout.notify(`FATAL ERROR during JS concat!`);
-                        }
-                        WorkerFarm.end(concatBuildWorker);
+                    runTaskInBackground<void>(concatBuildTaskModulePath, this.buildCommand).catch(error => {
+                        Shout.fatal(`during JS concat:`, error);
+                        Shout.notify(`FATAL ERROR during JS concat!`);
                     });
                 }
                 return;
