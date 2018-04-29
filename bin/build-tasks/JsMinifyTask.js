@@ -1,6 +1,6 @@
 "use strict";
 const UglifyJS = require("uglify-js");
-module.exports = function (input) {
+module.exports = function jsMinifyTask(input) {
     let result = UglifyJS.minify(input.payload, input.options);
     return new Promise((ok, reject) => {
         if (result.error) {

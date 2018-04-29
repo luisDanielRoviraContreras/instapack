@@ -5,7 +5,7 @@ import { Shout } from "../Shout";
 /**
  * Accepts build task command as input parameter then run TypeScript build tool.
  */
-export = async function (input: IBuildCommand) {
+export = async function typescriptBuildTask(input: IBuildCommand) {
     if (input.flags.watch) {
         Shout.enableNotification = input.flags.notification;
     }

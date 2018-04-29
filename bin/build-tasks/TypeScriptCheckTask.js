@@ -10,7 +10,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 const Settings_1 = require("../Settings");
 const Shout_1 = require("../Shout");
 const TypeScriptCheckerTool_1 = require("../TypeScriptCheckerTool");
-module.exports = function (input) {
+module.exports = function typescriptCheckTask(input) {
     return __awaiter(this, void 0, void 0, function* () {
         if (input.flags.watch) {
             Shout_1.Shout.enableNotification = input.flags.notification;

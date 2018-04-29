@@ -6,7 +6,7 @@ import { SassBuildTool } from "../SassBuildTool";
  * Accepts build task command as input parameter then run Sass build tool.
  * If watch mode is detected, returned Promise will never resolve.
  */
-export = async function (input: IBuildCommand) {
+export = async function sassBuildTask(input: IBuildCommand) {
     if (input.flags.watch) {
         Shout.enableNotification = input.flags.notification;
     }
