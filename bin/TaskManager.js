@@ -20,6 +20,9 @@ function runTaskInBackground(modulePath, params) {
     activeTasks.add(task);
     task.send(params);
     return new Promise((ok, reject) => {
+        task.on('error', error => {
+            reject(error);
+        });
         task.on('message', (feedback) => {
             if (feedback.errorStack) {
                 let error = new Error(`An unhandled exception has occurred in child process PID #${processId}:\n${feedback.errorStack}`);

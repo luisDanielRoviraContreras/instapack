@@ -7,7 +7,7 @@ import { IMinifyInputs } from '../IMinifyInputs';
 export = function jsMinifyTask(input: IMinifyInputs) {
     let result = UglifyJS.minify(input.payload, input.options);
 
-    return new Promise((ok, reject) => {
+    return new Promise<UglifyJS.MinifyOutput>((ok, reject) => {
         if (result.error) {
             reject(result.error);
         } else {

@@ -35,6 +35,9 @@ export function runTaskInBackground<T>(modulePath: string, params) {
     task.send(params);
 
     return new Promise<T>((ok, reject) => {
+        task.on('error', error => {
+            reject(error);
+        });
         task.on('message', (feedback: IBackgroundTaskFeedback<T>) => {
             // console.log(processId + ' FINISHED');
             if (feedback.errorStack) {
