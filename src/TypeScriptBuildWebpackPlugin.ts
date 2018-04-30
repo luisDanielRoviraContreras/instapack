@@ -7,6 +7,7 @@ import { Shout } from './Shout';
 import { MinifyOutput } from 'uglify-js';
 import { IMinifyInputs } from './IMinifyInputs';
 import { runTaskInBackground } from './TaskManager';
+// import jsMinifySync = require('./build-tasks/JsMinifyTask');
 
 const jsMinifyTaskModulePath = require.resolve('./build-tasks/JsMinifyTask');
 
@@ -62,7 +63,9 @@ function minifyChunkAssets(compilation: webpack.compilation.Compilation, chunks:
             let asset = compilation.assets[fileName] as Source;
             let input = createMinificationInput(asset, fileName, sourceMap);
 
-            let task = runTaskInBackground<MinifyOutput>(jsMinifyTaskModulePath, input).then(minified => {
+            // let t1 = jsMinifySync(input);
+            let t1 = runTaskInBackground<MinifyOutput>(jsMinifyTaskModulePath, input);
+            let t2 = t1.then(minified => {
                 let output: Source;
                 if (sourceMap) {
                     output = new SourceMapSource(minified.code, fileName, JSON.parse(minified.map),
@@ -76,7 +79,7 @@ function minifyChunkAssets(compilation: webpack.compilation.Compilation, chunks:
                 compilation.errors.push(minifyError);
             });
 
-            tasks.push(task);
+            tasks.push(t2);
         }
     }
 

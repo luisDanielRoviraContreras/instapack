@@ -39,7 +39,8 @@ function minifyChunkAssets(compilation, chunks, sourceMap) {
         for (let fileName of chunk.files) {
             let asset = compilation.assets[fileName];
             let input = createMinificationInput(asset, fileName, sourceMap);
-            let task = TaskManager_1.runTaskInBackground(jsMinifyTaskModulePath, input).then(minified => {
+            let t1 = TaskManager_1.runTaskInBackground(jsMinifyTaskModulePath, input);
+            let t2 = t1.then(minified => {
                 let output;
                 if (sourceMap) {
                     output = new webpack_sources_1.SourceMapSource(minified.code, fileName, JSON.parse(minified.map), input.code, input.map);
@@ -52,7 +53,7 @@ function minifyChunkAssets(compilation, chunks, sourceMap) {
                 Shout_1.Shout.error(`when minifying ${chalk_1.default.blue(fileName)} during JS build:`, minifyError);
                 compilation.errors.push(minifyError);
             });
-            tasks.push(task);
+            tasks.push(t2);
         }
     }
     return Promise.all(tasks);
