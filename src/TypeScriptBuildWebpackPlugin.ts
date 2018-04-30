@@ -26,22 +26,20 @@ interface ITypeScriptBuildWebpackPluginOptions {
 * @param fileName 
 */
 function createMinificationInput(asset: Source, fileName: string, sourceMap: boolean) {
-    let input: IMinifyInputs = {
-        payload: {}
-    };
+    let input: IMinifyInputs;
 
     if (sourceMap) {
         let o = asset.sourceAndMap();
-        input.code = input.payload[fileName] = o.source;
-        input.map = o.map as any; // HACK78
-        input.options = {
-            sourceMap: {
-                content: o.map,
-                // url: fileName + '.map'
-            }
+        input = {
+            fileName: fileName,
+            code: o.source,
+            map: o.map as any // HACK78
         }
     } else {
-        input.payload[fileName] = asset.source();
+        input = {
+            fileName: fileName,
+            code: asset.source()
+        }
     }
 
     return input;

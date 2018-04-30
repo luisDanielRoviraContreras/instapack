@@ -14,21 +14,20 @@ const Shout_1 = require("./Shout");
 const TaskManager_1 = require("./TaskManager");
 const jsMinifyTaskModulePath = require.resolve('./build-tasks/JsMinifyTask');
 function createMinificationInput(asset, fileName, sourceMap) {
-    let input = {
-        payload: {}
-    };
+    let input;
     if (sourceMap) {
         let o = asset.sourceAndMap();
-        input.code = input.payload[fileName] = o.source;
-        input.map = o.map;
-        input.options = {
-            sourceMap: {
-                content: o.map,
-            }
+        input = {
+            fileName: fileName,
+            code: o.source,
+            map: o.map
         };
     }
     else {
-        input.payload[fileName] = asset.source();
+        input = {
+            fileName: fileName,
+            code: asset.source()
+        };
     }
     return input;
 }
