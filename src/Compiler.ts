@@ -114,7 +114,7 @@ export class Compiler {
     }
 
     /**
-     * Restart invoked build task(s) when package.json and tsconfig.json are edited!
+     * Gets the serializable parameters for build workers.
      */
     async restartBuildsOnConfigurationChanges(taskName: string) {
 

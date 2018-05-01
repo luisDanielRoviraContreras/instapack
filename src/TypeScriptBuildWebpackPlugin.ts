@@ -2,9 +2,9 @@ import chalk from 'chalk';
 import * as webpack from 'webpack';
 import { Source, SourceMapSource, RawSource } from 'webpack-sources';
 import { RawSourceMap } from 'source-map';
-import { Shout } from './Shout';
-
 import { MinifyOutput } from 'uglify-js';
+
+import { Shout } from './Shout';
 import { IMinifyInputs } from './IMinifyInputs';
 import { runTaskInBackground } from './TaskManager';
 // import jsMinifySync = require('./build-tasks/JsMinifyTask');

@@ -55,7 +55,7 @@
     "chokidar": "2.0.3",
     "css-loader": "0.28.11",
     "enhanced-resolve": "4.0.0",
-    "fs-extra": "5.0.0",
+    "fs-extra": "6.0.0",
     "glob": "7.1.2",
     "html-minifier": "3.5.15",
     "loader-utils": "1.1.0",
@@ -67,10 +67,11 @@
     "typescript": "2.8.3",
     "uglify-js": "3.3.23",
     "upath": "1.0.5",
-    "vue-loader": "15.0.4",
+    "vue-loader": "15.0.5",
     "vue-template-compiler": "2.5.16",
     "webpack": "4.6.0",
     "webpack-sources": "1.1.0",
+    "worker-farm": "1.6.0",
     "yargs": "11.0.0"
   },
   "devDependencies": {

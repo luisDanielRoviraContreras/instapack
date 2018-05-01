@@ -52,7 +52,7 @@ export class TypeScriptBuildTool {
     /**
      * Translates tsconfig.json paths into webpack-compatible aliases!
      */
-    mergeTypeScriptPathsToWebpackAlias() {
+    private mergeTypeScriptPathsToWebpackAlias() {
         if (!this.tsconfigOptions.paths) {
             return;
         }
@@ -74,9 +74,9 @@ export class TypeScriptBuildTool {
             // technical limitation: 1 alias = 1 path, not multiple paths...
             let values = this.tsconfigOptions.paths[key];
             if (values.length > 1) {
-                Shout.warning(chalk.cyan('tsconfig.json'),
+                Shout.danger(chalk.cyan('tsconfig.json'),
                     'paths:', chalk.yellow(key), 'resolves to more than one path!',
-                    chalk.grey('(Only the first will be honored.)')
+                    chalk.grey('(Bundler will use the first one.)')
                 );
             }
 
@@ -122,7 +122,7 @@ export class TypeScriptBuildTool {
             use: {
                 loader: 'babel-loader'
             }
-        }
+        } as webpack.Rule;
     }
 
     /**
@@ -154,7 +154,7 @@ export class TypeScriptBuildTool {
             }
         });
 
-        return tsRules;
+        return tsRules as webpack.Rule;
     }
 
     /**
@@ -169,7 +169,7 @@ export class TypeScriptBuildTool {
                     transformAssetUrls: {},     // remove <img> src and SVG <image> xlink:href resolution
                 }
             }]
-        }
+        } as webpack.Rule;
     }
 
     /**
@@ -181,39 +181,51 @@ export class TypeScriptBuildTool {
             use: [{
                 loader: 'template-loader'
             }]
-        };
+        } as webpack.Rule;
     }
 
     /**
      * Gets CSS rules for webpack to prevent explosion during vue compile.
      */
     get cssWebpackRules() {
-        // <style module> IS NOT SUPPORTED BECAUSE css-loader TEAM PLANS TO REMOVE module OPTION!
-        //  https://github.com/webpack-contrib/css-loader/issues/509
+        let vueStyleLoader = {
+            loader: 'vue-style-loader'
+        };
+        let cssModulesLoader = {
+            loader: 'css-loader',
+            options: {
+                modules: true,
+                url: false
+            }
+        };
+        let cssLoader = {
+            loader: 'css-loader',
+            options: {
+                url: false
+            }
+        };
+
         return {
             test: /\.css$/,
-            use: [
-                {
-                    loader: 'vue-style-loader'
-                }, {
-                    loader: 'css-loader',
-                    options: {
-                        url: false
-                    }
-                }
-            ]
-        }
+            oneOf: [
+                { // this matches <style module>
+                    resourceQuery: /module/,
+                    use: [vueStyleLoader, cssModulesLoader]
+                }, { // this matches plain <style> or <style scoped>
+                    use: [vueStyleLoader, cssLoader]
+                }]
+        } as webpack.Rule;
     }
 
     /**
      * A simple flag to prevent instapack screaming about unsupported TypeScript build target twice. 
      */
-    buildTargetWarned = false;
+    private buildTargetWarned = false;
 
     /**
      * Chat to CLI user on build start. 
      */
-    onBuildStart() {
+    private onBuildStart() {
         let t = this.tsconfigOptions.target;
         if (!t) {
             t = TypeScript.ScriptTarget.ES3;
@@ -233,7 +245,7 @@ export class TypeScriptBuildTool {
     /**
      * Returns a configured webpack plugins.
      */
-    getWebpackPlugins() {
+    get webpackPlugins() {
         let plugins = [];
 
         plugins.push(new TypeScriptBuildWebpackPlugin({
@@ -261,7 +273,7 @@ export class TypeScriptBuildTool {
             },
             externals: this.settings.externals,
             resolve: {
-                extensions: ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.wasm', '.json', '.vue', '.html'],
+                extensions: ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.vue', '.wasm', '.json', '.html'],
                 // .mjs causes runtime error when `module.exports` is being used instead of `export`.
                 // .wasm requires adding `application/wasm` MIME to web server (both IIS and Kestrel).
                 alias: this.settings.alias
@@ -291,7 +303,7 @@ export class TypeScriptBuildTool {
                         vendors: {
                             name: 'dll',
                             test: /[\\/]node_modules[\\/]/,
-                            chunks: 'all',
+                            chunks: 'initial',
                             enforce: true,
                             priority: -10
                         }
@@ -301,7 +313,7 @@ export class TypeScriptBuildTool {
             performance: {
                 hints: false    // https://webpack.js.org/configuration/performance
             },
-            plugins: this.getWebpackPlugins()
+            plugins: this.webpackPlugins
         };
 
         if (this.babel) {
